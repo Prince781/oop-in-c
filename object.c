@@ -187,19 +187,20 @@ static void object_dispose (Object *self) {
 
 static void object_class_init (ObjectClass *klass) {
 	/* note: we need not do object_class_cast here,
-	 * but future objects inheriting will need to (at least
-	 * to override init() and dispose())
+	 * but future objects inheriting may need to
 	 * ex: we have type Derived, so we'll get a (DerivedClass *)
 	 *     passed to us. To override the ObjectClass virtual
 	 *     methods, we call object_class_cast (DerivedClass *)
 	 *     to get a (ObjectClass *)
 	 */
 	/* virtual methods */
-	klass->init = object_init;
 	klass->ref = object_ref_real;
 	klass->unref = object_unref_real;
 	klass->to_string = object_to_string_real;
-	klass->dispose = object_dispose;
+	/* note: mandatory chained methods, like
+	 * init() and dispose(), are automatically
+	 * defined after this function call
+	 */
 }
 
 static void instance_chain_up_init(uint64_t type, Object *object) {
@@ -215,7 +216,7 @@ static void instance_chain_up_init(uint64_t type, Object *object) {
 	klass->init (object);
 }
 
-Object *object_new(uint64_t type, ...) {
+void *object_new(uint64_t type, ...) {
 	ObjectClass *klass;
 	Object *instance;
 

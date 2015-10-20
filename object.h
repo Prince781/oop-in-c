@@ -34,7 +34,7 @@ struct _Object {
 
 #define OBJECT_TYPE (object_get_type())
 
-Object *object_new (uint64_t type, ...);
+void *object_new (uint64_t type, ...);
 
 Object *object_ref (Object *self);
 
@@ -82,16 +82,31 @@ TypeInitializer global_types_get_type_initializer (uint64_t type);
 
 #define _DEFINE_TYPE(ObjectName, prefix, BASE_TYPE) \
 	static void prefix##_##init (ObjectName *self);\
+	static void prefix##_##init_prepare (Object *object) {\
+		ObjectName *self = prefix##_##cast (object); \
+		assert (self != NULL); \
+		prefix##_##init (self);\
+	}\
 	static void prefix##_##dispose (ObjectName *self);\
+	static void prefix##_##dispose_prepare (Object *object) {\
+		ObjectName *self = prefix##_##cast (object); \
+		assert (self != NULL); \
+		prefix##_##dispose (self); \
+	}\
 	static void prefix##_##class_init (ObjectName##Class *klass);\
 	uint64_t prefix##_##get_type (void) {\
 		static uint64_t type = 0;\
 		if (type == 0) {\
 			uint64_t base_type = BASE_TYPE; \
+			ObjectClass *base_class; \
 			type = global_types_register_new (#ObjectName, sizeof(ObjectName##Class), \
 					sizeof(ObjectName), base_type, \
 					(TypeInitializer) &prefix##_class_init); \
 			assert (type != 0); \
+			base_class = global_types_get_class_by_type (type);\
+			assert (base_class != NULL); \
+			base_class->init = &prefix##_##init_prepare; \
+			base_class->dispose = &prefix##_##dispose_prepare; \
 		}\
 		return type; \
 	}\

@@ -8,10 +8,13 @@ static ObjectClass **defined_classes = NULL;
 static TypeInitializer *type_initializers = NULL;
 static uint64_t next_type = 2ul;
 
+/* this is a trie */
 struct TypeEntry {
 	ObjectClass *klass;
 	unsigned char symbol;
-	/* pointers to next items */
+	/* pointers to next items
+	 * TODO: surely we could save space here?
+	 */
 	struct TypeEntry *next[0x100];
 };
 
@@ -40,6 +43,14 @@ static void klass_init_chain_up (uint64_t base_type, ObjectClass *klass) {
  * Registers a new type with the dynamic type
  * system.
  * TODO: make this thread-safe
+ * params:
+ * @name - name of type (not class), like "Object" for ObjectClass
+ * @klass_size - size of class (like sizeof(ObjectClass))
+ * @instance_size - size of instance (like sizeof(Object))
+ * @base_type - the super type of this type (like ANY_TYPE for Object)
+ * @klass_init - a function to initialize this class definition
+ *     (NOTE: chaining is done automatically, so the class is first initialized
+ *            by its base initializer, then so on until (*klass_init) is called)
  */
 uint64_t global_types_register_new(const char *name,
 		size_t klass_size, size_t instance_size,
@@ -175,6 +186,14 @@ static void object_dispose (Object *self) {
 }
 
 static void object_class_init (ObjectClass *klass) {
+	/* note: we need not do object_class_cast here,
+	 * but future objects inheriting will need to (at least
+	 * to override init() and dispose())
+	 * ex: we have type Derived, so we'll get a (DerivedClass *)
+	 *     passed to us. To override the ObjectClass virtual
+	 *     methods, we call object_class_cast (DerivedClass *)
+	 *     to get a (ObjectClass *)
+	 */
 	/* virtual methods */
 	klass->init = object_init;
 	klass->ref = object_ref_real;
@@ -215,13 +234,13 @@ Object *object_new(uint64_t type, ...) {
 }
 
 Object *object_ref(Object *self) {
-	return self->klass->ref (self);
+	return object_get_class (self)->ref (self);
 }
 
 void object_unref(Object **selfptr) {
-	(*selfptr)->klass->unref (selfptr);
+	object_get_class (*selfptr)->unref (selfptr);
 }
 
 char *object_to_string(Object *self) {
-	return self->klass->to_string (self);
+	return object_get_class (self)->to_string (self);
 }

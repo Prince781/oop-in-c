@@ -2,6 +2,7 @@
 #define _OBJECT_H
 #include <stddef.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 typedef struct _ObjectClass ObjectClass;
 typedef struct _Object Object;
@@ -28,8 +29,6 @@ struct _Object {
 	const struct _ObjectClass *klass;
 	uint64_t refcount;
 };
-
-uint64_t object_get_type(void);
 
 #define ANY_TYPE ((uint64_t) 0ul)
 
@@ -62,10 +61,25 @@ ObjectClass *global_types_get_class_by_type (uint64_t type);
 
 TypeInitializer global_types_get_type_initializer (uint64_t type);
 
+#define _DECLARE_TYPE(ObjectName, prefix) \
+	uint64_t prefix##_##get_type (void); \
+	bool prefix##_##is_type (uint64_t type); \
+	static inline ObjectName##Class *prefix##_##get_class (void *self) {\
+		return ((self != NULL && (*(ObjectClass **)self) != NULL && prefix##_##is_type ((*(ObjectClass **)self)->type)) ? (*(ObjectName##Class **)self) : NULL); \
+	} \
+	static inline ObjectName *prefix##_##cast (void *self) {\
+		return (prefix##_##get_class (self) != NULL ? (ObjectName *) self : NULL);\
+	}\
+	static inline ObjectName##Class *prefix##_class_cast (void *self) {\
+		return ((self != NULL && prefix##_##is_type (((ObjectClass *)self)->type)) ? ((ObjectName##Class *)self) : NULL);\
+	}
+
 /**
  * for creating new objects, this macro should appear
- * in the .c file
+ * in the .h file
  */
+#define DECLARE_TYPE(TypeName, type_prefix) _DECLARE_TYPE(TypeName, type_prefix)
+
 #define _DEFINE_TYPE(ObjectName, prefix, BASE_TYPE) \
 	static void prefix##_##init (ObjectName *self);\
 	static void prefix##_##dispose (ObjectName *self);\
@@ -80,8 +94,27 @@ TypeInitializer global_types_get_type_initializer (uint64_t type);
 			assert (type != 0); \
 		}\
 		return type; \
+	}\
+	bool prefix##_##is_type (uint64_t type) {\
+		const uint64_t self_type = prefix##_##get_type ();\
+		ObjectClass *klass; \
+		while (type > BASE_TYPE) {\
+			klass = global_types_get_class_by_type (type); \
+			assert (klass != NULL); \
+			if (klass->type == self_type) \
+				return true;\
+			type = klass->base_type;\
+		}\
+		return false;\
 	}
 
+/**
+ * for creating new objects, this macro should appear
+ * in the .c file
+ */
 #define DEFINE_TYPE(TypeName, type_prefix, base_type) _DEFINE_TYPE(TypeName, type_prefix, base_type)
+
+/* finally, declare the type */
+DECLARE_TYPE (Object, object);
 
 #endif

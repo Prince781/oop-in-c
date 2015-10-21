@@ -3,14 +3,11 @@
 #include <assert.h>
 #include <string.h>
 
-static uint64_t class_slots = 0ul;
-static ObjectClass **defined_classes = NULL;
-static TypeInitializer *type_initializers = NULL;
-static uint64_t next_type = 2ul;
+static Type next_type = 0;
 
 /* this is a trie */
 struct TypeEntry {
-	ObjectClass *klass;
+	TypeInstance *type;
 	unsigned char symbol;
 	/* pointers to next items
 	 * TODO: surely we could save space here?
@@ -19,52 +16,68 @@ struct TypeEntry {
 };
 
 static struct TypeEntry types_root = {
-	.klass = NULL,
+	.type = NULL,
 	.symbol = 0,
 	.next = { NULL }
 };
 
-static void klass_init_chain_up (uint64_t base_type, ObjectClass *klass) {
-	TypeInitializer klass_init;
-	ObjectClass *parent_class;
+static TypeInstance **types_table = NULL;
+static Type types_table_size = 0;
 
-	if (base_type > 0) {
-		klass_init = global_types_get_type_initializer (base_type);
-		parent_class = global_types_get_class_by_type (base_type);
-		
-		assert (klass_init != NULL && parent_class != NULL);
+/* for types */
+static void type_instance_initialize_chain_up (TypeInstance *tinst, Type type) {
+	TypeInstance *base_inst;
 
-		klass_init_chain_up (parent_class->base_type, klass);
-		(*klass_init)(klass);
+	if (type > TYPE_ANY) {
+		base_inst = global_types_get_instance (type);
+
+		assert (base_inst != NULL);
+
+		type_instance_initialize_chain_up (tinst, base_inst->base_type);
+		(*base_inst->type_init)(tinst);
 	}
 }
 
-/**
- * Registers a new type with the dynamic type
- * system.
- * TODO: make this thread-safe
- * params:
- * @name - name of type (not class), like "Object" for ObjectClass
- * @klass_size - size of class (like sizeof(ObjectClass))
- * @instance_size - size of instance (like sizeof(Object))
- * @base_type - the super type of this type (like ANY_TYPE for Object)
- * @klass_init - a function to initialize this class definition
- *     (NOTE: chaining is done automatically, so the class is first initialized
- *            by its base initializer, then so on until (*klass_init) is called)
- */
-uint64_t global_types_register_new(const char *name,
-		size_t klass_size, size_t instance_size,
-		uint64_t base_type,
-		TypeInitializer klass_init) {
-	struct TypeEntry *types_root_ptr = &types_root;
-	struct TypeEntry **entry = &types_root_ptr;
+/* for instances */
+static void type_instance_instance_initialize_chain_up (void *data, TypeInstance *type) {
+	TypeInstance *base;
+
+	if (type->base_type > TYPE_ANY) {
+		base = global_types_get_instance (type->base_type);
+		assert (base != NULL);
+		type_instance_instance_initialize_chain_up (data, base);
+	}
+
+	if (type->klass_size > 0) {
+		assert (type->instance_init != NULL);
+		(*type->instance_init)(data);
+	}
+}
+
+static void type_instance_instance_dispose_chain_down (void *data, TypeInstance *type) {
+	TypeInstance *base;
+
+	if (type->klass_size > 0) {
+		assert (type->instance_dispose != NULL);
+		(*type->instance_dispose)(data);
+	}
+
+	if (type->base_type > TYPE_ANY) {
+		base = global_types_get_instance (type->base_type);
+		assert (base != NULL);
+		type_instance_instance_dispose_chain_down (data, base);
+	}
+}
+
+static struct TypeEntry *global_types_make_entry (const char *name) {
+	struct TypeEntry *root_entry = &types_root;
+	struct TypeEntry **entry;
 	const unsigned char *ptr;
 
-	assert (strcmp (name, "") != 0);
-	assert (klass_size >= sizeof(ObjectClass));
-	assert (instance_size >= sizeof(Object));
-
+	assert (name != NULL && *name != '\0');
+	entry = &root_entry;
 	ptr = name;
+
 	while (*ptr != '\0') {
 		entry = &(*entry)->next[*ptr];
 		if (*entry == NULL) {
@@ -74,72 +87,124 @@ uint64_t global_types_register_new(const char *name,
 		++ptr;
 	}
 
-	assert (entry != &types_root_ptr && *entry != NULL);
-	assert ((*entry)->klass == NULL);
+	assert (entry != &root_entry);
+	assert (*entry != NULL);
+	return *entry;
+}
 
-	if (defined_classes == NULL || next_type >= class_slots) {
-		uint64_t old_slots = class_slots;
-		class_slots = next_type * 2;
-		defined_classes = realloc(defined_classes, class_slots * sizeof(*defined_classes));
-		memset(defined_classes + old_slots, 0, (class_slots - old_slots) * sizeof(*defined_classes));
-		type_initializers = realloc(type_initializers, class_slots * sizeof(*type_initializers));
-		memset(type_initializers + old_slots, 0, (class_slots - old_slots) * sizeof(*type_initializers));
+#define TYPE_INSTANCE_INIT(typeval, name, type)\
+	{ 0, typeval, sizeof(type), 0, name, NULL, NULL, NULL, NULL }
+
+static void global_types_register_basic (void) {
+	assert (next_type == 0);
+
+	TypeInstance basic_types[N_BASIC_TYPES] = {
+		{ 0, TYPE_ANY, 0, 0, "Any", NULL, NULL, NULL, NULL },
+		TYPE_INSTANCE_INIT(TYPE_UCHAR, "uchar", unsigned char),
+		TYPE_INSTANCE_INIT(TYPE_CHAR, "char", char),
+		TYPE_INSTANCE_INIT(TYPE_USHORT, "ushort", unsigned short),
+		TYPE_INSTANCE_INIT(TYPE_SHORT, "short", short),
+		TYPE_INSTANCE_INIT(TYPE_UINT, "uint", unsigned int),
+		TYPE_INSTANCE_INIT(TYPE_INT, "int", int),
+		TYPE_INSTANCE_INIT(TYPE_ULONG, "ulong", unsigned long),
+		TYPE_INSTANCE_INIT(TYPE_LONG, "long", long),
+		TYPE_INSTANCE_INIT(TYPE_BOOL, "bool", bool),
+		TYPE_INSTANCE_INIT(TYPE_FLOAT, "float", float),
+		TYPE_INSTANCE_INIT(TYPE_DOUBLE, "double", double),
+		TYPE_INSTANCE_INIT(TYPE_POINTER, "pointer", void *),
+		TYPE_INSTANCE_INIT(TYPE_TYPE, "Type", Type)
+	};
+	struct TypeEntry *entry = NULL;
+	Type i;
+
+	types_table_size = N_BASIC_TYPES;
+	types_table = calloc(types_table_size, sizeof(*types_table));
+
+	for (i=0; i<N_BASIC_TYPES; ++i) {
+		assert (basic_types[i].type == i);
+		basic_types[i].name = strdup (basic_types[i].name);
+
+		entry = global_types_make_entry (basic_types[i].name);
+		assert (entry->type == NULL);
+		entry->type = calloc(1, sizeof(*entry->type));
+		memcpy(entry->type, &basic_types[i], sizeof(*entry->type));
+
+		types_table [entry->type->type] = entry->type;
+		++next_type;
 	}
 
-	(*entry)->klass = calloc(1, klass_size);
-	(*entry)->klass->base_type = base_type;
-	(*entry)->klass->type = next_type++;
-	(*entry)->klass->instance_size = instance_size;
-	(*entry)->klass->name = strdup(name);
-
-	defined_classes [(*entry)->klass->type] = (*entry)->klass;
-	type_initializers [(*entry)->klass->type] = klass_init;
-
-	klass_init_chain_up (base_type, (*entry)->klass);
-	assert (klass_init != NULL);
-	(*klass_init)((*entry)->klass);
-
-	return (*entry)->klass->type;
+	assert (next_type == N_BASIC_TYPES);
 }
 
-ObjectClass *global_types_get_class_by_name (const char *name) {
-	struct TypeEntry *entry = &types_root;
-	const unsigned char *ptr;
+Type global_types_register_new (Type base_type,
+		size_t instance_size, size_t klass_size,
+		const char *name,
+		TypeInitializer type_init,
+		TypeDestructor type_dispose,
+		InstanceInitializer instance_init,
+		InstanceDestructor instance_dispose) {
+	struct TypeEntry *entry;
+	TypeInstance *type_inst;
 
-	assert (strcmp(name, "") != 0);
+	if (next_type == 0)
+		global_types_register_basic ();
 
-	ptr = name;
-	while (*ptr != '\0' && entry != NULL) {
-		entry = entry->next[*ptr];
+	assert (instance_size > 0);
+
+	entry = global_types_make_entry (name);
+
+	assert (entry->type == NULL);
+	assert (klass_size >= sizeof(*type_inst) || klass_size == 0);
+
+	type_inst = calloc(1, (klass_size >= sizeof(*type_inst)) ? 
+				klass_size : sizeof(*type_inst));
+	
+	assert (type_inst != NULL);
+
+	type_inst->base_type = base_type;
+	type_inst->type = next_type++;
+	type_inst->instance_size = instance_size;
+	type_inst->klass_size = klass_size;
+	type_inst->name = strdup (name);
+
+	type_inst->type_init = type_init;
+	type_inst->type_dispose = type_dispose;
+
+	type_inst->instance_init = instance_init;
+	type_inst->instance_dispose = instance_dispose;
+
+	entry->type = type_inst;
+	if (types_table_size <= type_inst->type) {
+		uint64_t oldsize = types_table_size;
+		types_table_size += oldsize;
+		types_table = realloc(types_table, types_table_size * sizeof(*types_table));
+		memset(types_table + oldsize, 0, oldsize * sizeof(*types_table));
 	}
 
-	if (entry == NULL)
-		return NULL;
+	assert (type_inst->type < types_table_size);
+	types_table [type_inst->type] = type_inst;
 
-	return entry->klass;
+	if (klass_size >= sizeof(*type_inst)) {
+		assert (type_init != NULL);
+		// assert (type_dispose != NULL);
+		assert (instance_init != NULL);
+		assert (instance_dispose != NULL);
+		
+		type_instance_initialize_chain_up (type_inst, type_inst->base_type);
+		(*type_inst->type_init)(type_inst);
+	}
+
+	return entry->type->type;
 }
 
-ObjectClass *global_types_get_class_by_type (uint64_t type) {
-	ObjectClass *klass;
+TypeInstance *global_types_get_instance (Type type) {
+	assert (types_table != NULL);
+	assert (type < next_type);
 
-	assert (type < class_slots);
-	klass = defined_classes [type];
-	assert (klass->type == type);
-
-	return klass;
+	return types_table [type];
 }
 
-TypeInitializer global_types_get_type_initializer (uint64_t type) {
-	TypeInitializer klass_init;
-
-	assert (type < class_slots);
-	klass_init = type_initializers [type];
-	assert (klass_init != NULL);
-
-	return klass_init;
-}
-
-DEFINE_TYPE (Object, object, ANY_TYPE);
+DEFINE_TYPE (Object, object, TYPE_ANY);
 
 static void object_init (Object *self) {
 	self->refcount = 1;
@@ -148,17 +213,6 @@ static void object_init (Object *self) {
 static Object *object_ref_real(Object *self) {
 	++self->refcount;
 	return self;
-}
-
-static void instance_chain_down_dispose(uint64_t type, Object *object) {
-	ObjectClass *klass;
-
-	klass = global_types_get_class_by_type (type);
-	assert (klass != NULL);
-
-	klass->dispose (object);
-	if (klass->base_type > 0)
-		instance_chain_down_dispose (klass->base_type, object);
 }
 
 static void object_unref_real(Object **selfptr) {
@@ -170,11 +224,11 @@ static void object_unref_real(Object **selfptr) {
 	Object *self = *selfptr;
 	*selfptr = NULL;
 	if (self->refcount == 0)
-		instance_chain_down_dispose (self->klass->type, self);
+		type_instance_instance_dispose_chain_down (self, *(TypeInstance **)self);
 }
 
 static char *object_to_string_real (Object *self) {
-	return strdup(self->klass->name);
+	return strdup((*(TypeInstance **)self)->name);
 }
 
 static void object_dispose (Object *self) {
@@ -192,42 +246,32 @@ static void object_class_init (ObjectClass *klass) {
 	 *     passed to us. To override the ObjectClass virtual
 	 *     methods, we call object_class_cast (DerivedClass *)
 	 *     to get a (ObjectClass *)
+	 * note: the class's TypeInstance is already defined with
+	 *       the proper methods and information
 	 */
 	/* virtual methods */
 	klass->ref = object_ref_real;
 	klass->unref = object_unref_real;
 	klass->to_string = object_to_string_real;
-	/* note: mandatory chained methods, like
-	 * init() and dispose(), are automatically
-	 * defined after this function call
-	 */
 }
 
-static void instance_chain_up_init(uint64_t type, Object *object) {
-	ObjectClass *klass;
+static void object_class_dispose (ObjectClass *klass) { /* ... */ }
 
-	klass = global_types_get_class_by_type (type);
-	assert (klass != NULL);
+void *object_new(Type type, ...) {
+	TypeInstance *type_inst;
+	TypeInstance **ti_ptr;
+	void *instance;
 
-	if (klass->base_type > 0)
-		instance_chain_up_init (klass->base_type, object);
+	type_inst = global_types_get_instance (type);
+	assert (type_inst != NULL);
+	assert (type_inst->klass_size >= sizeof(*type_inst));
 
-	assert(klass->instance_size <= object->klass->instance_size);
-	klass->init (object);
-}
-
-void *object_new(uint64_t type, ...) {
-	ObjectClass *klass;
-	Object *instance;
-
-	klass = global_types_get_class_by_type (type);
-	assert (klass != NULL);
-
-	instance = calloc(1, klass->instance_size);
-	instance->klass = klass;
+	instance = calloc(1, type_inst->instance_size);
+	ti_ptr = instance;
+	*ti_ptr = type_inst;
 
 	/* chain up to base constructor */
-	instance_chain_up_init(klass->type, instance);
+	type_instance_instance_initialize_chain_up (instance, type_inst);
 
 	// TODO: varargs
 

@@ -4,25 +4,74 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+/* BEGIN: type system */
+
+typedef struct _TypeInstance TypeInstance;
+
+typedef void (*TypeInitializer)(void *);
+typedef void (*TypeDestructor)(void *);
+typedef void (*InstanceInitializer)(void *);
+typedef void (*InstanceDestructor)(void *);
+
+typedef uint64_t Type;
+
+struct _TypeInstance {
+	/* a value of 0 indicates no parent */
+	Type base_type;
+	Type type;
+	size_t instance_size;
+	/* if klass_size == 0, then this is a 
+	 * non-instantiable type */
+	size_t klass_size;
+	const char *name;
+
+	/* the following methods are chained */
+	TypeInitializer     type_init;
+	TypeDestructor      type_dispose;
+
+	InstanceInitializer instance_init;
+	InstanceDestructor  instance_dispose;
+};
+
+Type global_types_register_new (Type base_type,
+		size_t instance_size, size_t klass_size,
+		const char *name,
+		TypeInitializer type_init,
+		TypeDestructor type_dispose,
+		InstanceInitializer instance_init,
+		InstanceDestructor instance_dispose);
+
+TypeInstance *global_types_get_instance (Type type);
+
+/* END: type system */
+
+/* basic types */
+#define TYPE_ANY ((Type) 0)
+#define TYPE_UCHAR (TYPE_ANY + 1)
+#define TYPE_CHAR (TYPE_UCHAR + 1)
+#define TYPE_USHORT (TYPE_CHAR + 1)
+#define TYPE_SHORT (TYPE_USHORT + 1)
+#define TYPE_UINT (TYPE_SHORT + 1)
+#define TYPE_INT (TYPE_UINT + 1)
+#define TYPE_ULONG (TYPE_INT + 1)
+#define TYPE_LONG (TYPE_ULONG + 1)
+#define TYPE_BOOL (TYPE_LONG + 1)
+#define TYPE_FLOAT (TYPE_BOOL + 1)
+#define TYPE_DOUBLE (TYPE_FLOAT + 1)
+#define TYPE_POINTER (TYPE_DOUBLE + 1)
+#define TYPE_TYPE (TYPE_POINTER + 1)
+#define N_BASIC_TYPES (TYPE_TYPE + 1)
+
 typedef struct _ObjectClass ObjectClass;
 typedef struct _Object Object;
 
 struct _ObjectClass {
-	uint64_t base_type;
-	uint64_t type;
-	size_t instance_size;
-	const char *name;
-
-	/* virtual (chained) methods */
-	void (*init)(Object *self);
+	struct _TypeInstance type_class;
 
 	/* virtual methods */
 	Object *(*ref)(Object *self);
 	void (*unref)(Object **selfptr);
 	char *(*to_string)(Object *self);
-
-	/* virtual (chained) methods */
-	void (*dispose)(Object *self);
 };
 
 struct _Object {
@@ -30,11 +79,9 @@ struct _Object {
 	uint64_t refcount;
 };
 
-#define ANY_TYPE ((uint64_t) 0ul)
+#define TYPE_OBJECT (object_get_type())
 
-#define OBJECT_TYPE (object_get_type())
-
-void *object_new (uint64_t type, ...);
+void *object_new (Type type, ...);
 
 Object *object_ref (Object *self);
 
@@ -42,36 +89,21 @@ void object_unref (Object **selfptr);
 
 char *object_to_string (Object *self);
 
-static inline size_t object_sizeof (Object *self) {
-	return self->klass->instance_size;
+static inline size_t object_sizeof (void *self) {
+	return (self != NULL && (*(TypeInstance **)self) != NULL) ? (*(TypeInstance **)self)->instance_size : 0;
 }
 
-typedef void (*TypeInitializer)(void *);
-
-/* NOTE: this should not be called manually */
-uint64_t global_types_register_new(const char *name,
-		size_t klass_size, size_t instance_size,
-		uint64_t base_type,
-		TypeInitializer klass_init);
-
-
-ObjectClass *global_types_get_class_by_name (const char *name);
-
-ObjectClass *global_types_get_class_by_type (uint64_t type);
-
-TypeInitializer global_types_get_type_initializer (uint64_t type);
-
-#define _DECLARE_TYPE(ObjectName, prefix) \
-	uint64_t prefix##_##get_type (void); \
-	bool prefix##_##is_type (uint64_t type); \
-	static inline ObjectName##Class *prefix##_##get_class (void *self) {\
-		return ((self != NULL && (*(ObjectClass **)self) != NULL && prefix##_##is_type ((*(ObjectClass **)self)->type)) ? (*(ObjectName##Class **)self) : NULL); \
+#define _DECLARE_TYPE(TypeName, prefix) \
+	Type prefix##_get_type (void); \
+	bool prefix##_is_type (Type type); \
+	static inline TypeName##Class *prefix##_get_class (void *self) {\
+		return ((self != NULL && (*(TypeInstance **)self) != NULL && prefix##_is_type ((*(TypeInstance **)self)->type)) ? (*(TypeName##Class **)self) : NULL); \
 	} \
-	static inline ObjectName *prefix##_##cast (void *self) {\
-		return (prefix##_##get_class (self) != NULL ? (ObjectName *) self : NULL);\
+	static inline TypeName *prefix##_##cast (void *self) {\
+		return (prefix##_get_class (self) != NULL ? (TypeName *) self : NULL);\
 	}\
-	static inline ObjectName##Class *prefix##_class_cast (void *self) {\
-		return ((self != NULL && prefix##_##is_type (((ObjectClass *)self)->type)) ? ((ObjectName##Class *)self) : NULL);\
+	static inline TypeName##Class *prefix##_class_cast (void *self) {\
+		return ((self != NULL && prefix##_is_type (((TypeInstance *)self)->type)) ? ((TypeName##Class *)self) : NULL);\
 	}
 
 /**
@@ -80,45 +112,58 @@ TypeInitializer global_types_get_type_initializer (uint64_t type);
  */
 #define DECLARE_TYPE(TypeName, type_prefix) _DECLARE_TYPE(TypeName, type_prefix)
 
-#define _DEFINE_TYPE(ObjectName, prefix, BASE_TYPE) \
-	static void prefix##_##init (ObjectName *self);\
-	static void prefix##_##init_prepare (Object *object) {\
-		ObjectName *self = prefix##_##cast (object); \
-		assert (self != NULL); \
-		prefix##_##init (self);\
+#define _DEFINE_TYPE(TypeName, prefix, BASE_TYPE) \
+	static void prefix##_init (TypeName *self);\
+	static void __##prefix##_init (void *self) { \
+		TypeName *data; \
+		data = (*(TypeInstance **)self)->instance_size >= sizeof(*data) ? self : NULL; \
+		assert (data != NULL); \
+		prefix##_init (data); \
 	}\
-	static void prefix##_##dispose (ObjectName *self);\
-	static void prefix##_##dispose_prepare (Object *object) {\
-		ObjectName *self = prefix##_##cast (object); \
-		assert (self != NULL); \
-		prefix##_##dispose (self); \
+	static void prefix##_dispose (TypeName *self);\
+	static void __##prefix##_dispose (void *self) { \
+		TypeName *data; \
+		data = (*(TypeInstance **)self)->instance_size >= sizeof(*data) ? self : NULL; \
+		assert (data != NULL); \
+		prefix##_dispose (data);\
 	}\
-	static void prefix##_##class_init (ObjectName##Class *klass);\
-	uint64_t prefix##_##get_type (void) {\
-		static uint64_t type = 0;\
+	static void prefix##_class_init (TypeName##Class *klass);\
+	static void __##prefix##_class_init (void *self) { \
+		TypeName##Class *data; \
+		data = ((TypeInstance *)self)->klass_size >= sizeof(*data) ? self : NULL; \
+		assert (data != NULL); \
+		prefix##_class_init (data); \
+	}\
+	static void prefix##_class_dispose (TypeName##Class *klass);\
+	static void __##prefix##_class_dispose (void *self) { \
+		TypeName##Class *data; \
+		data = ((TypeInstance *)self)->klass_size >= sizeof(*data) ? self : NULL; \
+		assert (data != NULL); \
+		prefix##_class_dispose (data); \
+	}\
+	Type prefix##_get_type (void) {\
+		static Type type = 0;\
 		if (type == 0) {\
-			uint64_t base_type = BASE_TYPE; \
-			ObjectClass *base_class; \
-			type = global_types_register_new (#ObjectName, sizeof(ObjectName##Class), \
-					sizeof(ObjectName), base_type, \
-					(TypeInitializer) &prefix##_class_init); \
+			type = global_types_register_new (BASE_TYPE, \
+					sizeof(TypeName), sizeof(TypeName##Class), \
+					"" # TypeName, \
+					&__##prefix##_class_init,\
+					&__##prefix##_class_dispose,\
+					&__##prefix##_init,\
+					&__##prefix##_dispose);\
 			assert (type != 0); \
-			base_class = global_types_get_class_by_type (type);\
-			assert (base_class != NULL); \
-			base_class->init = &prefix##_##init_prepare; \
-			base_class->dispose = &prefix##_##dispose_prepare; \
 		}\
 		return type; \
 	}\
-	bool prefix##_##is_type (uint64_t type) {\
-		const uint64_t self_type = prefix##_##get_type ();\
-		ObjectClass *klass; \
+	bool prefix##_is_type (Type type) {\
+		const Type self_type = prefix##_get_type ();\
+		TypeInstance *type_inst; \
 		while (type > BASE_TYPE) {\
-			klass = global_types_get_class_by_type (type); \
-			assert (klass != NULL); \
-			if (klass->type == self_type) \
+			type_inst = global_types_get_instance (type); \
+			assert (type_inst != NULL); \
+			if (type_inst->type == self_type) \
 				return true;\
-			type = klass->base_type;\
+			type = type_inst->base_type;\
 		}\
 		return false;\
 	}

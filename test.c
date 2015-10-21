@@ -16,8 +16,6 @@ int main() {
 
 	assert (sizeof(*o1) == object_sizeof(o1));
 
-	object_unref(&o1);
-
+	object_clear_ref (&o1);
 	assert (o1 == NULL);
-	printf("o1 disposed of\n");
 }

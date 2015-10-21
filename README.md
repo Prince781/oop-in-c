@@ -5,12 +5,12 @@ Object-oriented C
 I'm doing this to learn and because I'm curious. I'll probably get bored with things eventually.
 
 ## Things planned
-[x] basic object system
-[x] non-instantiable types
-[ ] generic values
-[ ] parameter specs
-[ ] generic classes? (ex: `HashMap<K,V>`)
-[ ] more stuff
+- [X] basic object system
+- [X] non-instantiable types
+- [ ] generic values
+- [ ] parameter specs
+- [ ] generic classes? (ex: `HashMap<K,V>`)
+- [ ] more stuff
 
 ## Further comments
 It would be nice to have some way of storing type parameters for classes. 
@@ -23,4 +23,6 @@ It would also be nice to do this for non-instantiable types ("primitives") witho
 2. [Java reflection with generics](http://stackoverflow.com/questions/3609799/how-to-get-type-parameter-values-using-java-reflection)
 3. [GParamSpec](https://developer.gnome.org/gobject/stable/gobject-GParamSpec.html)
 4. [C11's \_Generic](http://abissell.com/2014/01/16/c11s-_generic-keyword-macro-applications-and-performance-impacts/)
+5. [Object Oriented Programming with ANSI C](https://www.cs.rit.edu/~ats/books/ooc.pdf)
+6. [GObject Memory Management](https://developer.gnome.org/gobject/stable/gobject-memory.html)
 

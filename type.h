@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+typedef uint64_t Type;
 typedef struct _TypeInstance TypeInstance;
 
 typedef void (*TypeInitializer)(void *);
@@ -12,7 +13,12 @@ typedef void (*TypeDestructor)(void *);
 typedef void (*InstanceInitializer)(void *);
 typedef void (*InstanceDestructor)(void *);
 
-typedef uint64_t Type;
+/**
+ * Returns true if the given type is 
+ * a subtype of some type, or false
+ * if the type is not a subtype.
+ */
+typedef bool (*TypeVerifier)(Type);
 
 struct _TypeInstance {
 	/* a value of 0 indicates no parent */
@@ -30,6 +36,9 @@ struct _TypeInstance {
 
 	InstanceInitializer instance_init;
 	InstanceDestructor  instance_dispose;
+
+	/* not chained */
+	TypeVerifier        type_is;
 };
 
 /**
@@ -58,6 +67,12 @@ struct _TypeInstance {
  *     - The contents of @name must be a _unique_ mnemonic for
  *       the type. It must not be NULL and it must be non-zero
  *       in length.
+ *     - @type_is must be a pointer to a function checking
+ *       if a given type is a subtype. Obviously, since the
+ *       function cannot make comparisons before the type
+ *       is created, it is recommended to have the function
+ *       refer to a static variable, which is initialized with
+ *       the return value of this function.
  *     - Finally, the @base_type must be a type that is
  *       also an instantiable type. The one exception is
  *       TYPE_ANY, which can be used to mean that our type
@@ -71,6 +86,7 @@ struct _TypeInstance {
  *     - @name is subject to the same rules as above
  *     - @type_init and @type_dispose are ignored for now (TODO)
  *     - @instance_init and @instance_dispose are ignored
+ *     - @type_is must be defined
  */
 Type global_types_register_new (Type base_type,
 		size_t instance_size, size_t klass_size,
@@ -78,7 +94,8 @@ Type global_types_register_new (Type base_type,
 		TypeInitializer type_init,
 		TypeDestructor type_dispose,
 		InstanceInitializer instance_init,
-		InstanceDestructor instance_dispose);
+		InstanceDestructor instance_dispose,
+		TypeVerifier type_is);
 
 TypeInstance *global_types_get_instance (Type type);
 
@@ -159,7 +176,8 @@ void type_instance_instance_dispose (void *data);
 					&__##prefix##_class_init,\
 					&__##prefix##_class_dispose,\
 					&__##prefix##_init,\
-					&__##prefix##_dispose);\
+					&__##prefix##_dispose,\
+					&prefix##_is_type);\
 			assert (type != 0); \
 		}\
 		return type; \

@@ -27,4 +27,5 @@ It would also be nice to do this for certain non-instantiable types ("primitives
 5. [Object Oriented Programming with ANSI C](https://www.cs.rit.edu/~ats/books/ooc.pdf)
 6. [GObject Memory Management](https://developer.gnome.org/gobject/stable/gobject-memory.html)
 7. [libffi](https://github.com/atgreen/libffi)
+8. [Java super type tokens](http://gafter.blogspot.com/2006/12/super-type-tokens.html)
 

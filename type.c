@@ -101,26 +101,52 @@ static struct TypeEntry *global_types_make_entry (const char *name) {
 }
 
 #define TYPE_INSTANCE_INIT(typeval, name, type)\
-	{ 0, typeval, sizeof(type), 0, name, NULL, NULL, NULL, NULL }
+{ 0, typeval, sizeof(type), 0, #name, NULL, NULL, NULL, NULL, &name##_is_type }
+
+#define TYPE_INSTANCE_INIT_TYPE(typeval, type)\
+{ 0, typeval, sizeof(type), 0, #type, NULL, NULL, NULL, NULL, &type##_is_type }
+
+#define is_type_define(prefix, type)\
+static bool prefix##_is_type(Type other_type) {\
+	return other_type == type;\
+}
+
+// #define is_type_define(prefix, type) _is_type_define(prefix, type)
+
+static bool Any_is_type (Type type) { return true; }
+
+is_type_define(uchar, TYPE_UCHAR)
+is_type_define(char, TYPE_CHAR)
+is_type_define(ushort, TYPE_USHORT)
+is_type_define(short, TYPE_SHORT)
+is_type_define(uint, TYPE_UINT)
+is_type_define(int, TYPE_INT)
+is_type_define(ulong, TYPE_ULONG)
+is_type_define(long, TYPE_LONG)
+is_type_define(bool, TYPE_BOOL)
+is_type_define(float, TYPE_FLOAT)
+is_type_define(double, TYPE_DOUBLE)
+is_type_define(pointer, TYPE_POINTER)
+is_type_define(Type, TYPE_TYPE)
 
 static void global_types_register_basic (void) {
 	assert (next_type == 0);
 
 	TypeInstance basic_types[N_BASIC_TYPES] = {
-		{ 0, TYPE_ANY, 0, 0, "Any", NULL, NULL, NULL, NULL },
-		TYPE_INSTANCE_INIT(TYPE_UCHAR, "uchar", unsigned char),
-		TYPE_INSTANCE_INIT(TYPE_CHAR, "char", char),
-		TYPE_INSTANCE_INIT(TYPE_USHORT, "ushort", unsigned short),
-		TYPE_INSTANCE_INIT(TYPE_SHORT, "short", short),
-		TYPE_INSTANCE_INIT(TYPE_UINT, "uint", unsigned int),
-		TYPE_INSTANCE_INIT(TYPE_INT, "int", int),
-		TYPE_INSTANCE_INIT(TYPE_ULONG, "ulong", unsigned long),
-		TYPE_INSTANCE_INIT(TYPE_LONG, "long", long),
-		TYPE_INSTANCE_INIT(TYPE_BOOL, "bool", bool),
-		TYPE_INSTANCE_INIT(TYPE_FLOAT, "float", float),
-		TYPE_INSTANCE_INIT(TYPE_DOUBLE, "double", double),
-		TYPE_INSTANCE_INIT(TYPE_POINTER, "pointer", void *),
-		TYPE_INSTANCE_INIT(TYPE_TYPE, "Type", Type)
+		{ 0, TYPE_ANY, 0, 0, "Any", NULL, NULL, NULL, NULL, &Any_is_type },
+		TYPE_INSTANCE_INIT(TYPE_UCHAR, uchar, unsigned char),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_CHAR, char),
+		TYPE_INSTANCE_INIT(TYPE_USHORT, ushort, unsigned short),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_SHORT, short),
+		TYPE_INSTANCE_INIT(TYPE_UINT, uint, unsigned int),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_INT, int),
+		TYPE_INSTANCE_INIT(TYPE_ULONG, ulong, unsigned long),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_LONG, long),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_BOOL, bool),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_FLOAT, float),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_DOUBLE, double),
+		TYPE_INSTANCE_INIT(TYPE_POINTER, pointer, void *),
+		TYPE_INSTANCE_INIT_TYPE(TYPE_TYPE, Type)
 	};
 	struct TypeEntry *entry = NULL;
 	Type i;
@@ -150,7 +176,8 @@ Type global_types_register_new (Type base_type,
 		TypeInitializer type_init,
 		TypeDestructor type_dispose,
 		InstanceInitializer instance_init,
-		InstanceDestructor instance_dispose) {
+		InstanceDestructor instance_dispose,
+		TypeVerifier type_is) {
 	struct TypeEntry *entry;
 	TypeInstance *type_inst;
 
@@ -167,6 +194,8 @@ Type global_types_register_new (Type base_type,
 		assert (instance_init != NULL);
 		assert (instance_dispose != NULL);
 	}
+
+	assert (type_is != NULL);
 
 	entry = global_types_make_entry (name);
 
@@ -190,6 +219,8 @@ Type global_types_register_new (Type base_type,
 
 	type_inst->instance_init = instance_init;
 	type_inst->instance_dispose = instance_dispose;
+
+	type_inst->type_is = type_is;
 
 	entry->type = type_inst;
 	if (types_table_size <= type_inst->type) {

@@ -6,6 +6,9 @@ BINARY=oop-test
 
 .PHONY: all clean
 
+%.o: %.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -c $^ -o $@
+
 $(BINARY): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 

@@ -84,7 +84,7 @@ static struct TypeEntry *global_types_make_entry (const char *name) {
 
 	assert (name != NULL && *name != '\0');
 	entry = &root_entry;
-	ptr = name;
+	ptr = (const unsigned char *)name;
 
 	while (*ptr != '\0') {
 		entry = &(*entry)->next[*ptr];

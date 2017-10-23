@@ -1,5 +1,6 @@
+OBJDIR=obj
 SOURCES=$(wildcard *.c) $(wildcard */*.c)
-OBJECTS=$(SOURCES:%.c=%.o)
+OBJECTS=$(SOURCES:%.c=$(OBJDIR)/%.o)
 CFLAGS=-Wall -Werror -g -ggdb3
 LDFLAGS=
 BINARY=oop-test
@@ -13,8 +14,13 @@ install: $(BINARY)
 clean:
 	rm -f $(BINARY)
 	rm -f $(OBJECTS)
+	rm -rf $(OBJDIR)
 
-%.o: %.c
+$(OBJDIR):
+	mkdir $@
+
+$(OBJDIR)/%.o: %.c
+	@if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
 	$(CC) $(CFLAGS) $(LDFLAGS) -c $^ -o $@
 
 $(BINARY): $(OBJECTS)

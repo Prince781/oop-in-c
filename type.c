@@ -25,11 +25,11 @@ static TypeInstance **types_table = NULL;
 static Type types_table_size = 0;
 
 /* for types */
-static void type_instance_initialize_chain_up (TypeInstance *tinst, Type type) {
+static void type_instance_initialize_chain_up (TypeInstance *tinst, Type btype) {
 	TypeInstance *base_inst;
 
-	if (type > TYPE_ANY) {
-		base_inst = global_types_get_instance (type);
+	if (btype > TYPE_ANY) {
+		base_inst = global_types_get_instance (btype);
 
 		assert (base_inst != NULL);
 
@@ -38,9 +38,21 @@ static void type_instance_initialize_chain_up (TypeInstance *tinst, Type type) {
 	}
 }
 
-static void type_instance_dispose_chain_down (TypeInstance *tinst, Type type) {
-	/* TODO */
+/*
+static void type_instance_dispose_chain_up (TypeInstance *tinst, Type btype) {
+    TypeInstance *base_inst;
+
+    if (btype > TYPE_ANY) {
+        base_inst = global_types_get_instance (btype);
+
+        assert (base_inst != NULL);
+        assert (base_inst->type_dispose != NULL);
+
+        type_instance_dispose_chain_up (tinst, base_inst->base_type);
+        (*base_inst->type_dispose)(tinst);
+    }
 }
+*/
 
 /* for instances */
 static void type_instance_instance_initialize_chain_up (void *data, 
@@ -272,4 +284,5 @@ void type_instance_instance_dispose (void *data) {
 	assert (*(TypeInstance **)data != NULL);
 
 	type_instance_instance_dispose_chain_down (data, *(TypeInstance **)data);
+    free(data);
 }

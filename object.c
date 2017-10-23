@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -28,12 +29,10 @@ static char *object_to_string_real (Object *self) {
 
 static void object_dispose (Object *self) {
 #ifdef OBJECT_DEBUG
-#include <stdio.h>
 	printf("%s: disposing (%s *) %p\n", __func__, 
 			(*(TypeInstance **)self)->name, self);
 #endif
 	assert (self->refcount == 0);
-	free(self);
 }
 
 static void object_class_init (ObjectClass *klass) {

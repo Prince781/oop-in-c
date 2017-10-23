@@ -84,7 +84,7 @@ struct _TypeInstance {
  *     - @klass_size must be zero
  *     - @instance_size must be non-zero.
  *     - @name is subject to the same rules as above
- *     - @type_init and @type_dispose are ignored for now (TODO)
+ *     - @type_init and @type_dispose are ignored for now
  *     - @instance_init and @instance_dispose are ignored
  *     - @type_is must be defined
  */
@@ -100,6 +100,10 @@ Type global_types_register_new (Type base_type,
 TypeInstance *global_types_get_instance (Type type);
 
 void *type_instance_instance_new (Type type);
+
+/**
+ * Call an object's destructor
+ */
 void type_instance_instance_dispose (void *data);
 
 /* basic types */

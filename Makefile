@@ -1,7 +1,7 @@
 OBJDIR=obj
 SOURCES=$(wildcard *.c) $(wildcard */*.c)
 OBJECTS=$(SOURCES:%.c=$(OBJDIR)/%.o)
-CFLAGS=-Wall -Werror -g -ggdb3
+CFLAGS=-Wall -Werror -g3 -ggdb3
 LDFLAGS=
 BINARY=oop-test
 

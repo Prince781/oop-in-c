@@ -280,9 +280,9 @@ void *type_instance_instance_new (Type type) {
 }
 
 void type_instance_instance_dispose (void *data) {
-	assert (data != NULL);
-	assert (*(TypeInstance **)data != NULL);
+    assert (data != NULL);
+    assert (*(TypeInstance **)data != NULL);
 
-	type_instance_instance_dispose_chain_down (data, *(TypeInstance **)data);
+    type_instance_instance_dispose_chain_down (data, *(TypeInstance **)data);
     free(data);
 }

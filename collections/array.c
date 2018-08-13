@@ -26,7 +26,7 @@ static char *array_class_to_string_real (Object *self) {
 	elem_tinst = global_types_get_instance (_self->etype);
 
 	assert (elem_tinst != NULL);
-	snprintf (buf, sizeof(buf), "%s<%s>",
+	snprintf (buf, sizeof(buf) - 1, "%s<%s>",
 			self_tinst->name, elem_tinst->name);
 	return strdup (buf);
 }

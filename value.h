@@ -28,9 +28,27 @@ union _ValueAny {
 
 struct _Value {
 	union _ValueAny val;
-	Type type;
-	bool is_set;
+        struct {
+            bool is_set : 1;
+            Type type   : 63;
+        };
 };
+
+#define value_create(type_id) ((Value) { .type = type_id, .is_set = false, .val = (Any) 0 })
+
+#define value_init(v) ((Value) { .type = (_Generic((v), \
+                unsigned char: TYPE_UCHAR,\
+                char: TYPE_CHAR,\
+                unsigned short: TYPE_USHORT,\
+                short: TYPE_SHORT,\
+                unsigned int: TYPE_UINT,\
+                int: TYPE_INT,\
+                unsigned long: TYPE_ULONG,\
+                long: TYPE_LONG,\
+                bool: TYPE_BOOL,\
+                float: TYPE_FLOAT,\
+                double: TYPE_DOUBLE,\
+                void *: TYPE_POINTER)), .is_set = true, .val = (Any) (v) })
 
 Value *value_new (Type type);
 

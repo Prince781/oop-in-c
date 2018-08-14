@@ -1,5 +1,6 @@
 #include "object.h"
 #include "collections/array.h"
+#include "value.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -31,6 +32,25 @@ int main() {
 	to_str = object_to_string (object_cast (array_obj));
 	printf ("array_obj is a %s\n", to_str);
 	free(to_str);
+
+        // test array more
+        for (int i = 0; i < 32; ++i)
+            array_add(array_int, &value_init(i));
+
+        assert(array_int->length > 0);
+
+        for (size_t i = 0; i < array_int->length; ++i)
+            printf ("array_int[%zu] = %d\n", i, array_int->data[i]._int);
+
+        // test values
+        Value *val = value_new(TYPE_INT);
+        value_set_typed(val, TYPE_INT, (Any) 100);
+        // value_set_typed(val, TYPE_DOUBLE, (Any) 0.3);
+
+        assert (val->is_set);
+
+        printf ("value(%s) = %d\n", global_types_get_instance(val->type)->name,
+                val->val._int);
 
 	return 0;
 }

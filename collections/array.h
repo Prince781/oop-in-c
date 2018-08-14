@@ -18,7 +18,7 @@ struct _Array {
 
 	size_t capacity;
 	size_t length;	/* number of elements */
-	Value **data;
+        Any *data;
 };
 
 #define TYPE_ARRAY (array_get_type ())
@@ -28,6 +28,10 @@ Array *array_new(Type elem_type);
 void array_add(Array *self, Value *item);
 
 void array_resize(Array *self, size_t newsize);
+
+Any array_get(const Array *self, size_t idx, Type type);
+
+Type array_get_elemtype(const Array *self);
 
 DECLARE_TYPE(Array, array);
 

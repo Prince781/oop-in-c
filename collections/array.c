@@ -53,8 +53,9 @@ void array_add(Array *self, Value *item) {
 	while (self->length >= self->capacity)
 		array_resize (self, self->length * 2);
 
-	self->data[self->length] = value_new (self->etype);
-	value_set_value (self->data[self->length], item);
+        Value tmpval = value_create(self->etype);
+	value_set_value (&tmpval, item);
+	self->data[self->length++] = tmpval.val;
 }
 
 void array_resize(Array *self, size_t newsize) {
@@ -64,4 +65,13 @@ void array_resize(Array *self, size_t newsize) {
 	memset(self->data + self->length, 0,
 		(newsize - self->capacity) * sizeof(*self->data));
 	self->capacity = newsize;
+}
+
+Any array_get(const Array *self, size_t idx, Type type) {
+    assert (idx < self->length);
+    return self->data[idx];
+}
+
+Type array_get_elemtype(const Array *self) {
+    return self->etype;
 }

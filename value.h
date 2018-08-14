@@ -11,27 +11,27 @@ typedef union _ValueAny Any;
 typedef struct _Value Value;
 
 union _ValueAny {
-	unsigned char _uchar;
-	char _char;
-	unsigned short _ushort;
-	short _short;
-	unsigned int _uint;
-	int _int;
-	unsigned long _ulong;
-	long _long;
-	bool _bool;
-	float _float;
-	double _double;
-	void *_pointer;
-	Type _type;
+    unsigned char _uchar;
+    char _char;
+    unsigned short _ushort;
+    short _short;
+    unsigned int _uint;
+    int _int;
+    unsigned long _ulong;
+    long _long;
+    bool _bool;
+    float _float;
+    double _double;
+    void *_pointer;
+    Type _type;
 };
 
 struct _Value {
-	union _ValueAny val;
-        struct {
-            bool is_set : 1;
-            Type type   : 63;
-        };
+    union _ValueAny val;
+    struct {
+        bool is_set : 1;
+        Type type   : 63;
+    };
 };
 
 #define value_create(type_id) ((Value) { .type = type_id, .is_set = false, .val = (Any) 0 })

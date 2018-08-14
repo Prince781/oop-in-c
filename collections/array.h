@@ -7,18 +7,18 @@ typedef struct _ArrayClass ArrayClass;
 typedef struct _Array Array;
 
 struct _ArrayClass {
-	ObjectClass parent_class;
+    ObjectClass parent_class;
 };
 
 struct _Array {
-	Object parent_instance;
-	
-	/* public instance fields */
-	Type etype;	/* element type */
+    Object parent_instance;
 
-	size_t capacity;
-	size_t length;	/* number of elements */
-        Any *data;
+    /* public instance fields */
+    Type etype;	/* element type */
+
+    size_t capacity;
+    size_t length;	/* number of elements */
+    Any *data;
 };
 
 #define TYPE_ARRAY (array_get_type ())

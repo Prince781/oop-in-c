@@ -67,9 +67,14 @@ void array_resize(Array *self, size_t newsize) {
     self->capacity = newsize;
 }
 
-Any array_get(const Array *self, size_t idx, Type type) {
+Value array_get(const Array *self, size_t idx) {
     assert (idx < self->length);
-    return self->data[idx];
+    // return self->data[idx];
+    return (Value){
+        .val = self->data[idx],
+        .is_set = true, 
+        .type = self->etype
+    };
 }
 
 Type array_get_elemtype(const Array *self) {

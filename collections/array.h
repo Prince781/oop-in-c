@@ -29,7 +29,7 @@ void array_add(Array *self, Value *item);
 
 void array_resize(Array *self, size_t newsize);
 
-Any array_get(const Array *self, size_t idx, Type type);
+Value array_get(const Array *self, size_t idx);
 
 Type array_get_elemtype(const Array *self);
 

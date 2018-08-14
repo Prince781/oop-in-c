@@ -39,8 +39,10 @@ int main() {
 
     assert(array_int->length > 0);
 
-    for (size_t i = 0; i < array_int->length; ++i)
-        printf ("array_int[%zu] = %d\n", i, array_int->data[i]._int);
+    for (size_t i = 0; i < array_int->length; ++i) {
+        Value val = array_get(array_int, i);
+        printf ("array_int[%zu] = %d\n", i, value_get_typed(&val, TYPE_INT)._int);
+    }
 
     // test values
     Value *val = value_new(TYPE_INT);
